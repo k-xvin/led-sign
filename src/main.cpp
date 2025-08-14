@@ -1,105 +1,80 @@
-
 #include <Arduino.h>
 #include <FastLED.h>
 
-#define MATRIX_WIDTH  30
-#define MATRIX_HEIGHT 5
-#define NUM_LEDS      (MATRIX_WIDTH * MATRIX_HEIGHT)
-#define DATA_PIN      25
+typedef unsigned char u8;
 
-#define MAX_MILLIAMPS 300
+enum {
+    kMatrixWidth = 30,
+    kMatrixHeight = 5,
+    kNumLeds = kMatrixHeight * kMatrixWidth,
+    kDataPin = 25,
+    kMaxMilliamps = 300,  // 300mA is plenty bright
+};
 
-CRGB leds[NUM_LEDS];
+// Based on https://alasseearfalas.itch.io/another-tiny-pixel-font-mono-3x5
+const u8 font3x5[][5] = {
+    {0b000, 0b000, 0b000, 0b000, 0b000}, // ' '
+    {0b010, 0b101, 0b111, 0b101, 0b101}, // 'A'
+    {0b110, 0b101, 0b110, 0b101, 0b110}, // 'B'
+    {0b011, 0b100, 0b100, 0b100, 0b011}, // 'C'
+    {0b110, 0b101, 0b101, 0b101, 0b110}, // 'D'
+    {0b111, 0b100, 0b110, 0b100, 0b111}, // 'E'
+    {0b111, 0b100, 0b110, 0b100, 0b100}, // 'F'
+    {0b011, 0b100, 0b101, 0b101, 0b011}, // 'G'
+    {0b101, 0b101, 0b111, 0b101, 0b101}, // 'H'
+    {0b111, 0b010, 0b010, 0b010, 0b111}, // 'I'
+    {0b001, 0b001, 0b001, 0b101, 0b010}, // 'J'
+    {0b101, 0b101, 0b110, 0b101, 0b101}, // 'K'
+    {0b100, 0b100, 0b100, 0b100, 0b111}, // 'L'
+    {0b101, 0b111, 0b111, 0b101, 0b101}, // 'M'
+    {0b111, 0b101, 0b101, 0b101, 0b101}, // 'N'
+    {0b010, 0b101, 0b101, 0b101, 0b010}, // 'O'
+    {0b111, 0b101, 0b111, 0b100, 0b100}, // 'P'
+    {0b011, 0b101, 0b101, 0b110, 0b011}, // 'Q'
+    {0b111, 0b101, 0b110, 0b101, 0b101}, // 'R'
+    {0b011, 0b100, 0b111, 0b001, 0b110}, // 'S'
+    {0b111, 0b010, 0b010, 0b010, 0b010}, // 'T'
+    {0b101, 0b101, 0b101, 0b101, 0b111}, // 'U'
+    {0b101, 0b101, 0b101, 0b010, 0b010}, // 'V'
+    {0b101, 0b101, 0b111, 0b111, 0b101}, // 'W'
+    {0b101, 0b101, 0b010, 0b101, 0b101}, // 'X'
+    {0b101, 0b101, 0b010, 0b010, 0b010}, // 'Y'
+    {0b111, 0b001, 0b010, 0b100, 0b111}  // 'Z'
+};
+
+CRGB s_leds[kNumLeds];
 
 // Serpentine mapping for 2D matrix
-uint16_t XY(uint8_t x, uint8_t y) {
-    if (x >= MATRIX_WIDTH || y >= MATRIX_HEIGHT) return 0;
+u8 XY(u8 x, u8 y) {
+    if (x >= kMatrixWidth || y >= kMatrixHeight) return 0;
     if (y % 2 == 0) {
-        return y * MATRIX_WIDTH + x;
+        return y * kMatrixWidth + x;
     } else {
-        return y * MATRIX_WIDTH + (MATRIX_WIDTH - 1 - x);
+        return y * kMatrixWidth + (kMatrixWidth - 1 - x);
     }
 }
 
-// 4x5 font, each character is 5 rows of 4 bits (left to right)
-const uint8_t font4x5[][5] = {
-    // ' ' (space)
-    {0b0000, 0b0000, 0b0000, 0b0000, 0b0000},
-    // 'A'
-    {0b0110, 0b1001, 0b1111, 0b1001, 0b1001},
-    // 'B'
-    {0b1110, 0b1001, 0b1110, 0b1001, 0b1110},
-    // 'C'
-    {0b0111, 0b1000, 0b1000, 0b1000, 0b0111},
-    // 'D'
-    {0b1110, 0b1001, 0b1001, 0b1001, 0b1110},
-    // 'E'
-    {0b1111, 0b1000, 0b1110, 0b1000, 0b1111},
-    // 'F'
-    {0b1111, 0b1000, 0b1110, 0b1000, 0b1000},
-    // 'G'
-    {0b0111, 0b1000, 0b1011, 0b1001, 0b0111},
-    // 'H'
-    {0b1001, 0b1001, 0b1111, 0b1001, 0b1001},
-    // 'I'
-    {0b1111, 0b0010, 0b0010, 0b0010, 0b1111},
-    // 'J'
-    {0b0011, 0b0001, 0b0001, 0b1001, 0b0110},
-    // 'K'
-    {0b1001, 0b1010, 0b1100, 0b1010, 0b1001},
-    // 'L'
-    {0b1000, 0b1000, 0b1000, 0b1000, 0b1111},
-    // 'M'
-    {0b1001, 0b1111, 0b1001, 0b1001, 0b1001},
-    // 'N'
-    {0b1001, 0b1101, 0b1011, 0b1001, 0b1001},
-    // 'O'
-    {0b0110, 0b1001, 0b1001, 0b1001, 0b0110},
-    // 'P'
-    {0b1110, 0b1001, 0b1110, 0b1000, 0b1000},
-    // 'Q'
-    {0b0110, 0b1001, 0b1001, 0b1011, 0b0111},
-    // 'R'
-    {0b1110, 0b1001, 0b1110, 0b1010, 0b1001},
-    // 'S'
-    {0b0111, 0b1000, 0b0110, 0b0001, 0b1110},
-    // 'T'
-    {0b1111, 0b0010, 0b0010, 0b0010, 0b0010},
-    // 'U'
-    {0b1001, 0b1001, 0b1001, 0b1001, 0b0110},
-    // 'V'
-    {0b1001, 0b1001, 0b1001, 0b0101, 0b0010},
-    // 'W'
-    {0b1001, 0b1001, 0b1001, 0b1111, 0b1001},
-    // 'X'
-    {0b1001, 0b0101, 0b0010, 0b0101, 0b1001},
-    // 'Y'
-    {0b1001, 0b1001, 0b0110, 0b0010, 0b0010},
-    // 'Z'
-    {0b1111, 0b0001, 0b0010, 0b0100, 0b1111}};
-
 // Map ASCII to font index
-uint8_t getFontIndex(char c) {
+u8 getFontIndex(char c) {
     if (c == ' ') return 0;
     if (c >= 'A' && c <= 'Z') return (c - 'A') + 1;
     return 0;  // fallback to space
 }
 
 // Build text bitmap: rows[5][pixel columns]
-void buildTextBitmap(const char* text, uint8_t rows[5][300], int& pixelWidth) {
+void buildTextBitmap(const char* text, u8 rows[5][300], int& pixelWidth) {
     int col = 0;
     for (const char* p = text; *p; p++) {
-        uint8_t idx = getFontIndex(toupper(*p));
-        // For each column of the character (4 columns), reverse order for
-        // left-to-right
-        for (int8_t c = 3; c >= 0; c--) {
-            for (uint8_t r = 0; r < 5; r++) {
-                rows[r][col] = (font4x5[idx][r] >> c) & 0x01;
+        u8 idx = getFontIndex(toupper(*p));
+        // For each column of the character (3 columns), left-to-right
+        for (int8_t c = 0; c < 3; c++) {
+            for (u8 r = 0; r < 5; r++) {
+                rows[r][col] = (font3x5[idx][r] >> (2 - c)) & 0x01;
             }
             col++;
         }
         // Add 1 column spacing between characters
-        for (uint8_t r = 0; r < 5; r++) {
+        for (u8 r = 0; r < 5; r++) {
             rows[r][col] = 0;
         }
         col++;
@@ -107,17 +82,16 @@ void buildTextBitmap(const char* text, uint8_t rows[5][300], int& pixelWidth) {
     pixelWidth = col;
 }
 
-void drawBitmap(uint8_t rows[5][300], int pixelWidth, int scrollOffset,
-                CRGB color) {
+void drawBitmap(u8 rows[5][300], int pixelWidth, int scrollOffset, CRGB color) {
     FastLED.clear();
-    for (uint8_t row = 0; row < 5; row++) {
-        for (uint8_t col = 0; col < MATRIX_WIDTH; col++) {
-            // Reverse horizontal direction for left-to-right scrolling
-            int bitmapCol = (MATRIX_WIDTH - 1 - col) + scrollOffset;
-            uint8_t displayRow = row;
+    for (u8 row = 0; row < 5; row++) {
+        for (u8 col = 0; col < kMatrixWidth; col++) {
+            // Reverse the column order for left-to-right text
+            int bitmapCol = (kMatrixWidth - 1 - col) + scrollOffset;
+            u8 displayRow = row;
             if (bitmapCol >= 0 && bitmapCol < pixelWidth &&
                 rows[row][bitmapCol]) {
-                leds[XY(col, displayRow)] = color;
+                s_leds[XY(col, displayRow)] = color;
             }
         }
     }
@@ -125,8 +99,8 @@ void drawBitmap(uint8_t rows[5][300], int pixelWidth, int scrollOffset,
 }
 
 void setup() {
-    FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
-    FastLED.setMaxPowerInVoltsAndMilliamps(5, MAX_MILLIAMPS);
+    FastLED.addLeds<WS2812B, kDataPin, GRB>(s_leds, kNumLeds);
+    FastLED.setMaxPowerInVoltsAndMilliamps(5, kMaxMilliamps);
     FastLED.setBrightness(255);
     FastLED.clear();
     FastLED.show();
@@ -134,9 +108,9 @@ void setup() {
 
 void loop() {
     const char* message = "SOMETIMES THERE ARE PROBLEMS     DO NOT FRET";
-    static uint8_t textBitmap[5][300];
+    static u8 textBitmap[5][300];
     static int messagePixelWidth = 0;
-    static int scrollOffset = -MATRIX_WIDTH;
+    static int scrollOffset = -kMatrixWidth;
     static bool initialized = false;
     if (!initialized) {
         buildTextBitmap(message, textBitmap, messagePixelWidth);
@@ -145,7 +119,7 @@ void loop() {
     drawBitmap(textBitmap, messagePixelWidth, scrollOffset, CRGB::Red);
     scrollOffset++;
     if (scrollOffset > messagePixelWidth) {
-        scrollOffset = -MATRIX_WIDTH;
+        scrollOffset = -kMatrixWidth;
     }
     delay(60);
 }
