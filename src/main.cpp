@@ -14,6 +14,7 @@ enum {
 // Based on https://alasseearfalas.itch.io/another-tiny-pixel-font-mono-3x5
 const u8 font3x5[][5] = {
     {0b000, 0b000, 0b000, 0b000, 0b000}, // ' '
+    {0b000, 0b000, 0b000, 0b010, 0b100}, // ','
     {0b010, 0b101, 0b111, 0b101, 0b101}, // 'A'
     {0b110, 0b101, 0b110, 0b101, 0b110}, // 'B'
     {0b011, 0b100, 0b100, 0b100, 0b011}, // 'C'
@@ -57,7 +58,8 @@ u8 XY(u8 x, u8 y) {
 // Map ASCII to font index
 u8 getFontIndex(char c) {
     if (c == ' ') return 0;
-    if (c >= 'A' && c <= 'Z') return (c - 'A') + 1;
+    if (c == ',') return 1;
+    if (c >= 'A' && c <= 'Z') return (c - 'A') + 2;
     return 0;  // fallback to space
 }
 
@@ -101,13 +103,14 @@ void drawBitmap(u8 rows[5][300], int pixelWidth, int scrollOffset, CRGB color) {
 void setup() {
     FastLED.addLeds<WS2812B, kDataPin, GRB>(s_leds, kNumLeds);
     FastLED.setMaxPowerInVoltsAndMilliamps(5, kMaxMilliamps);
-    FastLED.setBrightness(255);
+    FastLED.setBrightness((u8)(255*0.5)); // 50%
     FastLED.clear();
     FastLED.show();
 }
 
 void loop() {
-    const char* message = "SOMETIMES THERE ARE PROBLEMS     DO NOT FRET";
+    // const char* message = "SOMETIMES THERE ARE PROBLEMS     DO NOT FRET";
+    const char* message = "JUDGE MY VOW, SPHINX OF BLACK QUARTZ";
     static u8 textBitmap[5][300];
     static int messagePixelWidth = 0;
     static int scrollOffset = -kMatrixWidth;
@@ -121,5 +124,5 @@ void loop() {
     if (scrollOffset > messagePixelWidth) {
         scrollOffset = -kMatrixWidth;
     }
-    delay(60);
+    delay(50);
 }
